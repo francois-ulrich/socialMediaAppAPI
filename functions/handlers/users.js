@@ -1,4 +1,4 @@
-const { db } = require('../util/admin');
+const { admin, db } = require('../util/admin');
 
 const firebaseConfig = require('../util/config');
 
@@ -21,6 +21,8 @@ exports.signup = (req, res) => {
 
     if(!valid)
         return res.status(400).json(errors);
+
+    const defaultProfilePicture = "default-pp.png";
 
     // Si tout est bon, persistance du nouveau user:
     let token, userId;
@@ -51,6 +53,7 @@ exports.signup = (req, res) => {
                     handle: newUser.handle,
                     email: newUser.email,
                     createdAt: new Date().toISOString(),
+                    imageUrl: `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${defaultProfilePicture}?alt=media`,
                     userId // équivalent à userId: userId
                 };
 
@@ -115,3 +118,68 @@ exports.login = (req, res) => {
         })
     })
 };
+
+exports.uploadImage = (req, res) => {
+    const BusBoy = require('busboy');
+
+    const path = require("path");
+    const os = require("os");
+    const fs = require("fs");
+
+    const busboy = new BusBoy({ headers: req.headers })
+
+    let imageFilename;
+    let imageToBeUploaded = {};
+
+    // Upload de fishier
+    busboy.on('file', (fieldname, file, filename, mimetype) => {
+        if(mimetype !== "image/jpeg" && mimetype !== "image/png"){
+            return res.status(400).json({
+                error: 'Wrong file type submitted'
+            });
+        }
+
+        // Création du string du nom du fichier image, de type "image.png"
+        
+        // Récupération de l'extension du fichier
+        const splitedFilename = filename.split('.');
+        const imageExtension = splitedFilename[splitedFilename.length - 1];
+        // Le nom du fichier sera une suite de chiffres random du type 654653422644689.png
+        imageFilename = `${Math.round( Math.random() * 100000000000000)}.${imageExtension}`;
+
+        // os.tmpdir() = Returns the operating system's default directory for temporary files as a string.
+        const filepath = path.join(os.tmpdir(), imageFilename);
+        imageToBeUploaded = {filepath, mimetype};
+
+        // Utilisation du file system de NodeJS pour créer le fichier
+        file.pipe(fs.createWriteStream(filepath))
+    });
+
+    busboy.on('finish', () => {
+        admin.storage().bucket().upload(imageToBeUploaded.filepath, {
+            resumable: false,
+            metadata: {
+                metadata:{
+                    contentType: imageToBeUploaded.mimetype
+                }
+            }
+        })
+        .then(() => {
+            // alt=media affiche le fichier dans le navigateur à la place de le télécharger le fichier
+            const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${firebaseConfig.storageBucket}/o/${imageFilename}?alt=media`;
+            // Update des document de l'utilisateur authentifié: Ajout / update d'une propriété imageUrl
+            return db.doc(`/users/${req.user.handle}`).update({ imageUrl });
+        })
+        .then(() => {
+            return res.json({message: "Image uploaded successfuly"})
+        })
+        .catch((err) => {
+            console.error(err);
+            return res.status(500).json({
+                error: err.code
+            })
+        })
+    });
+
+    busboy.end(req.rawBody);
+}
