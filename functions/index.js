@@ -56,13 +56,68 @@ app.get("/screams", (req, res) => {
     });
 });
 
+// Création d'un middelware FBAuth (Firabase Authentication)
+const FBAuth = (req, res, next) => {
+    const bearerString = 'Bearer ';
+    let idToken
+    // Vérification de si on a un header avec le bearer
+    if(req.headers.authorization 
+    && req.headers.authorization.startsWith(bearerString)){
+        // Récupération du token
+        idToken = req.headers.authorization.split(bearerString)[1];
+    }
+    // Sinon, retour d'une 403 (unauthorized)
+    else{
+        console.error('No token found');
+        // Retour
+        return res.status(403).json({
+            error: 'Unauthorized'
+        })
+    }
+
+    admin
+    .auth()
+    .verifyIdToken(idToken)
+    // Récupération du user dans la BDD
+    .then(decodedToken => {
+        req.user = decodedToken;
+
+        return db
+        .collection('users')
+        .where('userId', '==', req.user.uid)
+        .limit(1)
+        .get();
+    })
+    // Après récupération des données utilisateur
+    .then(data => {
+        req.user.handle = data.docs[0].data().handle
+        // La requête dans laquelle est passée le middleware peut continuer 
+        // ex: app.post("/scream", FBAuth...
+        return next();
+    })
+    .catch(err => {
+        console.error('Error while verifyng token');
+        return res.status(403).json({err});
+
+    })
+}
+
 // Requête POST: créer des posts
-app.post("/scream", (req, res) => {
+app.post("/scream", FBAuth, (req, res) => {
+    console.log(req.body);
+
+
+    // Si le body du scream envoyé est vide, retourner une erreur 400 (bad request)
+    if(req.body.body.trim() === ''){
+        return res.status(400).json({
+            body: "Body must not be empty"
+        })
+    }
+
     // Récupération des parametres POST
     const newScream = {
         body: req.body.body,
-        userHandle: req.body.userHandle,
-        // createdAt: db.Timestamp.fromDate(new Date()),
+        userHandle: req.user.handle,
         createdAt: new Date().toISOString(),
     }
 
@@ -84,8 +139,25 @@ app.post("/scream", (req, res) => {
         })
 });
 
+// ======================
+// Fonctions helper
+// ======================
+
+const isEmpty = (string) => {
+    // .trim() permet de retirer les blancs en début et fin de chaîne
+    return string.trim() === '';
+}
+
+const isEmail = (string) => {
+    // Expression régulière vérifiant que le format du string soit une adresse email
+    const emailRegEx = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+
+    return string.match(emailRegEx);
+}
+
 // Route d'inscription (signup)
 app.post('/signup', (req, res) => {
+    // Création d'un objet newUser
     const newUser = {
         email: req.body.email,
         password: req.body.password,
@@ -93,6 +165,42 @@ app.post('/signup', (req, res) => {
         handle: req.body.handle
     }
 
+    let errors = {};
+
+    // Vérifications email, erreurs si:
+
+    // Email vide
+    if(isEmpty(newUser.email)){
+        errors.email = "Must not be empty";
+    }
+    // Texte passé n'est pas au format email
+    else if(!isEmail(newUser.email)){
+        errors.email = "Must be a valid email adress";
+    }
+
+    // Vérifications mdps et confirmation mdp, erreurs si:
+
+    // Mdp vide
+    if(isEmpty(newUser.password)){
+        errors.password = "Must not be empty";
+    }
+    // Mdp et confirmation mdp ne concordent pas
+    if(newUser.password != newUser.confirmPassword){
+        errors.confirmPassword = "Passwords must match";
+    }
+
+    // Vérifications handle, erreurs si:
+    // Le handle est vide
+    if(isEmpty(newUser.handle)){
+        errors.handle = "Must not be empty";
+    }
+
+    // Si des erreurs sont trouvées, retourner une 400 (bad request), et retourner un JSON des erreurs
+    if(Object.keys(errors).length > 0){
+        return res.status(400).json(errors);
+    }
+
+    // Si tout est bon, persistance du nouveau user:
     let token, userId;
     // Userhandle unique pour chaque nouvel utilisateur
     db.doc(`/users/${newUser.handle}`).get()
@@ -159,6 +267,65 @@ app.post('/signup', (req, res) => {
     //         error: err.code
     //     });
     // })
+});
+
+// Route de login
+app.post("/login", (req, res) => {
+    const user = {
+        email: req.body.email,
+        password: req.body.password,
+    };
+
+    let errors = {};
+
+    // Email vide
+    if(isEmpty(user.email)){
+        errors.email = "Must not be empty";
+    }
+    // Texte passé n'est pas au format email
+    else if(!isEmail(user.email)){
+        errors.email = "Must be a valid email adress";
+    }
+
+    // Vérifications mdps, erreurs si:
+
+    // Mdp vide
+    if(isEmpty(user.password)){
+        errors.password = "Must not be empty";
+    }
+
+    // Si des erreurs sont trouvées, retourner une 400 (bad request), et retourner un JSON des erreurs
+    if(Object.keys(errors).length > 0){
+        return res.status(400).json(errors);
+    }
+
+    // Sinon, connexion.
+    firebase
+    .auth()
+    .signInWithEmailAndPassword(user.email, user.password)
+    // Si connexion OK, récupération du token:
+    .then(data => {
+        return data.user.getIdToken();
+    })
+    .then(idToken => {
+        return res.json({
+            token: idToken
+        });
+    })
+    // Sinon, retour d'une erreur
+    .catch(err => {
+        // Si mauvais mdp, retour d'une 403 (not authorized)
+        if(err.code === "auth/wrong-password"){
+            return res.status(403).json({
+                general: "Wrong credentials, please try again"
+            })
+        }
+
+        console.error(err);
+        return res.status(500).json({
+            error: err.code
+        })
+    })
 });
 
 exports.api = functions.region('europe-west1').https.onRequest(app);
