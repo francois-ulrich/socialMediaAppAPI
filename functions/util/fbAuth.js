@@ -35,6 +35,7 @@ module.exports = (req, res, next) => {
     // Après récupération des données utilisateur
     .then(data => {
         req.user.handle = data.docs[0].data().handle
+        req.user.imageUrl = data.docs[0].data().imageUrl
         // La requête dans laquelle est passée le middleware peut continuer 
         // ex: app.post("/scream", FBAuth...
         return next();

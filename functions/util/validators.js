@@ -3,6 +3,8 @@ const isEmpty = (string) => {
     return string.trim() === '';
 }
 
+exports.isEmpty = isEmpty;
+
 const isEmail = (string) => {
     // Expression régulière vérifiant que le format du string soit une adresse email
     const emailRegEx = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;

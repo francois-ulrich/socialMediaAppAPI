@@ -5,8 +5,20 @@ const app = require('express')();
 
 const FBAuth = require('./util/fbAuth');
 
-const { getAllScreams, postOneScream } = require('./handlers/screams');
-const { login, signup, uploadImage, addUserDetails, getAuthenticatedUser } = require('./handlers/users');
+const { 
+    getAllScreams, 
+    postOneScream, 
+    getScream, 
+    commentOnScream 
+} = require('./handlers/screams');
+
+const { 
+    login, 
+    signup, 
+    uploadImage, 
+    addUserDetails, 
+    getAuthenticatedUser 
+} = require('./handlers/users');
 
 // const firebaseConfig = require('./util/config');
 
@@ -19,13 +31,22 @@ const { login, signup, uploadImage, addUserDetails, getAuthenticatedUser } = req
 
 // Routes screams
 app.get("/screams", getAllScreams);
-app.post("/scream", FBAuth, postOneScream); // Requête POST: créer un post
+app.get("/scream/:screamId",  getScream);
+app.post("/scream", FBAuth, postOneScream);
+app.post("/scream/:screamId/comment", FBAuth, commentOnScream);
+
+// TODO
+// delete scream
+// like a scream
+// unlike a scream
+// comment on scream
+
 
 // Route de login
+app.get("/user", FBAuth, getAuthenticatedUser);
 app.post("/login", login);
 app.post("/signup", signup);
 app.post("/user/image", FBAuth, uploadImage);
 app.post("/user", FBAuth, addUserDetails);
-app.get("/user", FBAuth, getAuthenticatedUser);
 
 exports.api = functions.region('europe-west1').https.onRequest(app);
