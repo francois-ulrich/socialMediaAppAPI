@@ -5,7 +5,7 @@ const firebaseConfig = require('../util/config');
 const firebase = require("firebase");
 firebase.initializeApp(firebaseConfig);
 
-const { validateSignupData, validateLoginData} = require('../util/validators');
+const { validateSignupData, validateLoginData, reduceUserDetails} = require('../util/validators');
 
 // Route d'inscription (signup)
 exports.signup = (req, res) => {
@@ -119,6 +119,66 @@ exports.login = (req, res) => {
     })
 };
 
+// Ajout des informations de l'utilisateur
+exports.addUserDetails = (req, res) => {
+    let userDetails = reduceUserDetails(req.body);
+
+    // Récupération du user
+    db
+    .doc(`/users/${req.user.handle}`)
+    .update(userDetails)
+    .then(()=>{
+        return res.json({
+            message: 'Details added successfuly'
+        });
+    })
+    .catch(err => {
+        console.error(err);
+
+        return res.status(500).json({error: err.code});
+    })
+}
+
+// Récupération des informations de l'utilisateur authentifié
+exports.getAuthenticatedUser = (req, res) => {
+    // Objet contenant les infos utilisateur
+    let userData = {};
+
+    // Récupération de l'utilisateur
+    db.doc(`/users/${req.user.handle}`)
+    .get()
+    .then(doc => {
+        if(doc.exists){
+            // Ajout dans l'objet
+            userData.credentials = doc.data();
+
+            // Récupération des likes
+            return db.collection('likes')
+            .where('userHandle', '==', req.user.handle)
+            .get()
+        }
+    })
+    .then(data => {
+        // Création d'un attribut likes listant les likes 
+        userData.likes = [];
+
+        // Ajout de chaque objet like à l'objet utilisateur 
+        data.forEach(doc => {
+            userData.likes.push(doc.data());
+        });
+
+        // Retour de l'objet contenant les données utilisateur
+        return res.json(userData);
+    })
+    // Retour d'erreur
+    .catch(err => {
+        console.error(err);
+
+        return res.status(500).json({error: err.code});
+    });
+}
+
+// Upload d'une image de profil
 exports.uploadImage = (req, res) => {
     const BusBoy = require('busboy');
 
@@ -132,8 +192,10 @@ exports.uploadImage = (req, res) => {
     let imageToBeUploaded = {};
 
     // Upload de fishier
-    busboy.on('file', (fieldname, file, filename, mimetype) => {
+    busboy.on('file', (fieldname, file, filename, encoding, mimetype) => {
         if(mimetype !== "image/jpeg" && mimetype !== "image/png"){
+            console.log("mimetype");
+            console.log(mimetype);
             return res.status(400).json({
                 error: 'Wrong file type submitted'
             });

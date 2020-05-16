@@ -69,3 +69,28 @@ exports.validateSignupData = (data) => {
         valid: Object.keys(errors).length === 0
     }
 }
+
+exports.reduceUserDetails = (data) => {
+    let userDetails = {};
+
+    // Récupération du user bio si il n'est pas vide
+    if(!isEmpty(data.bio.trim()))
+        userDetails.bio = data.bio;
+
+    // Récupération du site web
+    if(!isEmpty(data.website.trim())){
+        // Si il n'y a pas de http:// présent en début de chaine de caractère, ajout de ce dernier
+        if( data.website.trim().substring(0,4) !== 'http' ){
+            userDetails.website = `http://${data.website.trim()}`;
+        }
+        else{
+            userDetails.website = data.website.trim();
+        }
+    }
+
+    // Récupération du user bio si il n'est pas vide
+    if(!isEmpty(data.location.trim()))
+        userDetails.location = data.location;
+
+    return userDetails;
+}
