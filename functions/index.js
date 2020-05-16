@@ -7,9 +7,12 @@ const FBAuth = require('./util/fbAuth');
 
 const { 
     getAllScreams, 
-    postOneScream, 
+    postOneScream,
+    deleteScream,
     getScream, 
-    commentOnScream 
+    commentOnScream ,
+    likeScream,
+    unlikeScream
 } = require('./handlers/screams');
 
 const { 
@@ -34,6 +37,9 @@ app.get("/screams", getAllScreams);
 app.get("/scream/:screamId",  getScream);
 app.post("/scream", FBAuth, postOneScream);
 app.post("/scream/:screamId/comment", FBAuth, commentOnScream);
+app.post('/scream/:screamId/like', FBAuth, likeScream);
+app.post('/scream/:screamId/unlike', FBAuth, unlikeScream);
+app.delete("/scream/:screamId", FBAuth, deleteScream);
 
 // TODO
 // delete scream
