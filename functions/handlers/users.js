@@ -144,6 +144,9 @@ exports.getAuthenticatedUser = (req, res) => {
     // Objet contenant les infos utilisateur
     let userData = {};
 
+    console.log("req.user.handle");
+    console.log(req.user.handle);
+
     // Récupération de l'utilisateur
     db.doc(`/users/${req.user.handle}`)
     .get()
@@ -152,10 +155,18 @@ exports.getAuthenticatedUser = (req, res) => {
             // Ajout dans l'objet
             userData.credentials = doc.data();
 
+            // console.log("userData");
+            // console.log(userData);
+
             // Récupération des likes
             return db.collection('likes')
             .where('userHandle', '==', req.user.handle)
-            .get()
+            .get();
+        }
+        else{
+            return res.status(404).json({
+                error: "User not found"
+            })
         }
     })
     .then(data => {
@@ -167,7 +178,31 @@ exports.getAuthenticatedUser = (req, res) => {
             userData.likes.push(doc.data());
         });
 
-        // Retour de l'objet contenant les données utilisateur
+        // Récupération des notifications
+        return db.collection('notifications')
+        .where('recipient', '==', req.user.handle)
+        .orderBy('createdAt', 'desc')
+        .get();
+    })
+    .then(data => {
+        // Création d'un attribut notifications listant les notifications reçues par l'utilisateur
+        userData.notifications = [];
+
+        // Ajout de chaque objet like à l'objet utilisateur 
+        data.forEach(doc => {
+            // userData.notifications.push(doc.data());
+            userData.notifications.push({
+                recipient: doc.data().recipient,
+                sender: doc.data().sender,
+                read: doc.data().read,
+                screamId: doc.data().screamId,
+                type: doc.data().type,
+                createdAt: doc.data().createdAt,
+                notificationId: doc.id
+            });
+        });
+
+        // Retour des données
         return res.json(userData);
     })
     // Retour d'erreur
@@ -244,4 +279,81 @@ exports.uploadImage = (req, res) => {
     });
 
     busboy.end(req.rawBody);
+}
+
+// Get any user's details
+exports.getUserDetails = (req, res) => {
+    // Objet contenant les infos utilisateur
+    let userData = {};
+
+    // Récupération de l'utilisateur
+    db.doc(`/users/${req.params.handle}`)
+    .get()
+    .then(doc => {
+        if(doc.exists){
+            // Ajout dans l'objet
+            userData.credentials = doc.data();
+
+            // Récupération des screams
+            return db.collection('screams')
+            .where('userHandle', '==', req.params.handle)
+            .orderBy('createdAt', 'desc')
+            .get();
+        }
+        else{
+            return res.status(404).json({
+                error: "User not found"
+            })
+        }
+    })
+    .then(data => {
+        // Création d'un attribut likes listant les likes 
+        userData.screams = [];
+
+        // Ajout de chaque objet like à l'objet utilisateur 
+        data.forEach(doc => {
+            userData.screams.push({
+                body: doc.data().body,
+                createdAt: doc.data().createdAt,
+                userHandle: doc.data().userHandle,
+                userImage: doc.data().userImage,
+                likeCount: doc.data().likeCount,
+                commentCount: doc.data().commentCount,
+                screamId: doc.id
+            });
+        });
+
+        // Retour des données
+        return res.json(userData);
+    })
+    .catch(err => {
+        console.error(err);
+
+        return res.status(500).json({error: err.code});
+    });
+}
+
+exports.markNotificationsRead = (req, res) => {
+    // Batch: permet d'update plusieurs documents à la fois
+    let batch = db.batch();
+
+    req.body.forEach(notificationId => {
+        const notification = db.doc(`/notifications/${notificationId}`);
+        batch.update(notification, {read: true});
+    });
+
+    // Application des changements à la BDD
+    batch.commit()
+    // Message de retour
+    .then(()=>{
+        return res.json({
+            message: 'Notifications marked read'
+        })
+    })
+
+    // En cas d'erreur: code 500 & message d'erreur
+    .catch((err) => {
+    console.error(err);
+        res.status(500).json({ error: err.code });
+    });
 }
