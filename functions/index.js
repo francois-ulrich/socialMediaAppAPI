@@ -70,9 +70,9 @@ exports.createNotificationOnLike = functions
 .firestore
 .document(`likes/{id}`)
 .onCreate((snapshot) => {
-    db.doc(`/screams/${snapshot.data().screamId}`).get()
+    return db.doc(`/screams/${snapshot.data().screamId}`).get()
     .then(doc => {
-        if(doc.exists){
+        if(doc.exists && snapshot.data().userHandle != doc.data().userHandle){
             return db.doc(`/notifications/${snapshot.id}`).set({
                 createdAt: new Date().toISOString(),
                 recipient: doc.data().userHandle,
@@ -81,10 +81,7 @@ exports.createNotificationOnLike = functions
                 screamId: doc.id,
                 type: 'like',
             })
-        }
-    })
-    .then(() => {
-        return
+        } else return true;
     })
     // En cas d'erreur: code 500 & message d'erreur
     .catch((err) => {
@@ -99,7 +96,7 @@ exports.createNotificationOnComment = functions
 .firestore
 .document(`comments/{id}`)
 .onCreate((snapshot) => {
-    db.doc(`/screams/${snapshot.data().screamId}`).get()
+    return db.doc(`/screams/${snapshot.data().screamId}`).get()
     .then(doc => {
         if(doc.exists){
             return db.doc(`/notifications/${snapshot.id}`).set({
@@ -111,9 +108,6 @@ exports.createNotificationOnComment = functions
                 type: 'comment',
             })
         }
-    })
-    .then(() => {
-        return
     })
     // En cas d'erreur: code 500 & message d'erreur
     .catch((err) => {
@@ -127,13 +121,89 @@ exports.deleteNotificationOnUnlike = functions
 .firestore
 .document(`likes/{id}`)
 .onDelete((snapshot) => {
-    db.doc(`/notifications/${snapshot.id}`)
+    return db.doc(`/notifications/${snapshot.id}`)
     .delete()
-    .then(() => {
-        return;
-    })
     .catch((err) => {
         console.error(err);
         return;
+    });
+});
+
+exports.onUserImageChange = functions
+.region('europe-west1')
+.firestore
+.document(`/users/{userId}`)
+.onUpdate((change) => {
+    console.log(change.before.data());
+    console.log(change.after.data());
+
+    if(change.before.data().imageUrl !== change.after.data().imageUrl){
+        // Batch: permet d'update plusieurs documents à la fois
+        const batch = db.batch();
+
+        return db
+        .collection('screams')
+        .where('userHandle', '==', change.before.data().handle)
+        .get()
+        .then((data) => {
+            data.forEach((doc) => {
+                const scream = db.doc(`/screams/${doc.id}`);
+                batch.update(scream, {userImage: change.after.data().imageUrl});
+            })
+
+            return batch.commit()
+        })
+        .catch((err) => {
+            console.error(err);
+        });
+    } else return true;
+});
+
+// Suppression des likes / commentaires liés à un scream
+exports.onScreamDelete = functions
+.region('europe-west1')
+.firestore
+.document(`/screams/{screamId}`)
+.onDelete((snapshot, context) => {
+    const screamId = context.params.screamId;
+
+    const batch = db.batch();
+
+    return db
+    .collection('comments')
+    .where('screamId', '==', screamId)
+    .get()
+    .then((data) => {
+        data.forEach((doc) => {
+            const comment = db.doc(`/comments/${doc.id}`);
+            batch.delete(comment);
+        })
+
+        return db
+        .collection('likes')
+        .where('screamId', '==', screamId)
+        .get()
+    })
+    .then((data) => {
+        data.forEach((doc) => {
+            const like = db.doc(`/likes/${doc.id}`);
+            batch.delete(like);
+        })
+
+        return db
+        .collection('notifications')
+        .where('screamId', '==', screamId)
+        .get()
+    })
+    .then((data) => {
+        data.forEach((doc) => {
+            const notification = db.doc(`/notifications/${doc.id}`);
+            batch.delete(notification);
+        })
+
+        return batch.commit();
+    })
+    .catch((err) => {
+        console.error(err);
     });
 });

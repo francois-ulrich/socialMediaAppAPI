@@ -70,7 +70,9 @@ exports.signup = (req, res) => {
                     return res.status(400).json({email: 'Email is already in use'});
                 }
                 else{
-                    return res.status(500).json({error: err.code});
+                    return res.status(500).json({
+                        general: "Something went wrong, please try again."
+                    });
                 }
             })
         }
@@ -105,16 +107,10 @@ exports.login = (req, res) => {
     })
     // Sinon, retour d'une erreur
     .catch(err => {
-        // Si mauvais mdp, retour d'une 403 (not authorized)
-        if(err.code === "auth/wrong-password"){
-            return res.status(403).json({
-                general: "Wrong credentials, please try again"
-            })
-        }
-
-        console.error(err);
-        return res.status(500).json({
-            error: err.code
+        return res
+        .status(403)
+        .json({
+            general: "Wrong credentials, please try again"
         })
     })
 };

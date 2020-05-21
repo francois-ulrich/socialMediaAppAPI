@@ -12,7 +12,17 @@ exports.getAllScreams = (req, res) => {
 
         // Parcours et ajout de tous les screams
         data.forEach(doc => {
-            screams.push(doc.data());
+            // screams.push(doc.data());
+
+            screams.push({
+                screamId: doc.id,
+                body: doc.data().body,
+                userHandle: doc.data().userHandle,
+                createdAt: doc.data().createdAt,
+                commentCount: doc.data().commentCount,
+                likeCount: doc.data().likeCount,
+                userImage: doc.data().userImage,
+            })
         })
 
         // Return data
@@ -107,7 +117,7 @@ exports.commentOnScream = (req, res) => {
     // Erreur si le corps de texte envoyé est vide
     if( isEmpty( req.body.body ) ){
         // Retour d'un bad request
-        return res.status(400).json({ error: 'Must not be empty'})
+        return res.status(400).json({ comment: 'Must not be empty'})
     }
 
     // Récupération des parametres POST
@@ -184,23 +194,27 @@ exports.likeScream = (req, res) => {
         }
     })
     .then(data => {
-        if(data.empty){
-            return db.collection('likes').add({
-                screamId: req.params.screamId,
-                userHandle: req.user.handle
-            })
-            .then(() => {
-                screamData.likeCount++;
-
-                return screamDocument.update({
-                    likeCount:  screamData.likeCount
+        if(req.user.handle !== screamData.userHandle){
+            if(data.empty){
+                return db.collection('likes').add({
+                    screamId: req.params.screamId,
+                    userHandle: req.user.handle
                 })
-            })
-            .then(() => {
-                return res.json(screamData)
-            })
+                .then(() => {
+                    screamData.likeCount++;
+
+                    return screamDocument.update({
+                        likeCount:  screamData.likeCount
+                    })
+                })
+                .then(() => {
+                    return res.json(screamData)
+                })
+            }else{
+                return res.status(400).json({error: "Scream already liked"})
+            }
         }else{
-            return res.status(400).json({error: "Scream already liked"})
+            return res.status(400).json({error: "User can't like one of his own screams"})
         }
     })
     // En cas d'erreur: code 500 & message d'erreur
