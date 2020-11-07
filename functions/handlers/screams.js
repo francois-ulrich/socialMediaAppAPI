@@ -113,54 +113,85 @@ exports.getScream = (req, res) => {
 }
 
 // Ajout d'un commentaire à un scream
+// exports.commentOnScream = (req, res) => {
+//     // Erreur si le corps de texte envoyé est vide
+//     if( isEmpty( req.body.body ) ){
+//         // Retour d'un bad request
+//         return res.status(400).json({ comment: 'Must not be empty'})
+//     }
+
+//     // Récupération des parametres POST
+//     const newComment = {
+//         userHandle: req.user.handle,
+//         userImage: req.user.imageUrl,
+//         screamId: req.params.screamId, 
+//         body: req.body.body,
+//         createdAt: new Date().toISOString(),
+//     }
+
+//     // Le scream doit exister pour qu'on y ajoute un commentaire
+//     db.doc( `/screams/${req.params.screamId}`)
+//     .get()
+//     .then(doc => {
+//         if(!doc.exists){
+//             return res.status(404).json({error: "Scream doesn't exist"})
+//         }
+
+//         // Update du nombre de commentaire
+//         return doc.ref.update({ 
+//             commentCount: doc.data().commentCount + 1 
+//         });
+//     })
+//     .then(() => {
+//         // Envoi du nouveau post en base de donnée
+//         return db
+//         .collection('comments')
+//         // Ajout du nouveau post à la requête
+//         .add(newComment)
+//     })
+//     // Message de retour
+//     .then((doc) => {
+//         res.json(newComment);
+//     })
+//     // En cas d'erreur: code 500 & message d'erreur
+//     .catch((err) => {
+//         res.status(500).json({ error: 'something went wrong' });
+//         console.error(err);
+//     });
+// }
+
 exports.commentOnScream = (req, res) => {
-    // Erreur si le corps de texte envoyé est vide
-    if( isEmpty( req.body.body ) ){
-        // Retour d'un bad request
-        return res.status(400).json({ comment: 'Must not be empty'})
-    }
-
-    // Récupération des parametres POST
+    if (req.body.body.trim() === '')
+      return res.status(400).json({ comment: 'Must not be empty' });
+  
     const newComment = {
-        userHandle: req.user.handle,
-        userImage: req.user.imageUrl,
-        screamId: req.params.screamId, 
-        body: req.body.body,
-        createdAt: new Date().toISOString(),
-    }
-
-    // Le scream doit exister pour qu'on y ajoute un commentaire
-    db.doc( `/screams/${req.params.screamId}`)
-    .get()
-    .then(doc => {
-        if(!doc.exists){
-            return res.status(404).json({error: "Scream doesn't exist"})
+      body: req.body.body,
+      createdAt: new Date().toISOString(),
+      screamId: req.params.screamId,
+      userHandle: req.user.handle,
+      userImage: req.user.imageUrl
+    };
+    console.log(newComment);
+  
+    db.doc(`/screams/${req.params.screamId}`)
+      .get()
+      .then((doc) => {
+        if (!doc.exists) {
+          return res.status(404).json({ error: 'Scream not found' });
         }
-
-        // Update du nombre de commentaire
-        return doc.ref.update({ 
-            commentCount: doc.data().commentCount + 1 
-        });
-    })
-    .then(() => {
-        // Envoi du nouveau post en base de donnée
-        return db
-        .collection('comments')
-        // Ajout du nouveau post à la requête
-        .add(newComment)
-    })
-    // Message de retour
-    .then((doc) => {
-        res.status(201).json({
-            message: `document ${doc.id} created successfully`
-        });
-    })
-    // En cas d'erreur: code 500 & message d'erreur
-    .catch((err) => {
-        res.status(500).json({ error: 'something went wrong' });
-        console.error(err);
-    });
-}
+        return doc.ref.update({ commentCount: doc.data().commentCount + 1 });
+      })
+      .then(() => {
+        return db.collection('comments').add(newComment);
+      })
+      .then(() => {
+        res.json(newComment);
+      })
+      .catch((err) => {
+        console.log(err);
+        res.status(500).json({ error: 'Something went wrong' });
+      });
+  };
 
 // Ajout d'un like à un scream
 exports.likeScream = (req, res) => {

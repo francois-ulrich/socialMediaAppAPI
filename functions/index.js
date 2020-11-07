@@ -5,6 +5,9 @@ const app = require('express')();
 
 const FBAuth = require('./util/fbAuth');
 
+const cors = require('cors');
+app.use(cors());
+
 const {db} = require('./util/admin');
 
 const { 
@@ -51,7 +54,6 @@ app.delete("/scream/:screamId", FBAuth, deleteScream);
 // like a scream
 // unlike a scream
 // comment on scream
-
 
 // Route de login
 app.get("/user", FBAuth, getAuthenticatedUser);
